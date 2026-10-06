@@ -51,6 +51,7 @@ void __startLWIPThread() {
     if (initted) {
         return;
     }
+    initted = true; // PATCH: before xTaskCreate, the new task (core 0) re-enters this from lwip_init while the creator (core 1) is still here
     __lwipQueue = xQueueCreate(LWIP_WORK_ENTRIES, sizeof(LWIPWork));
     if (!__lwipQueue) {
         panic("Unable to allocate LWIP work queue");
@@ -59,7 +60,6 @@ void __startLWIPThread() {
         panic("Unable to create LWIP task");
     }
     vTaskCoreAffinitySet(__lwipTask, 1 << 0);
-    initted = true;
 }
 
 extern "C" void __lwip(__lwip_op op, void *req, bool fromISR) {

@@ -84,7 +84,9 @@ extern "C" void __wrap_cyw43_post_poll_hook() {
 }
 
 extern "C" void __wrap_cyw43_schedule_internal_poll_dispatch(__unused void (*func)()) {
-    lwip_callback(cb_cyw43_do_poll, nullptr);
+    // PATCH: the driver calls this under its lock; queue without waiting (the ISR path), the LWIP thread takes the lock
+    static __callback_req _dispatchBuffer;
+    lwip_callback(cb_cyw43_do_poll, nullptr, &_dispatchBuffer);
 }
 
 
@@ -145,7 +147,7 @@ extern "C" void __wrap_cyw43_driver_deinit(async_context_t *context) {
 // These methods are called in pensv context and on either core
 // They can be called recursively
 extern "C" void __wrap_cyw43_thread_enter() {
-    xSemaphoreTakeRecursive(_cyw43_arch_mutex, portTICK_PERIOD_MS);
+    xSemaphoreTakeRecursive(_cyw43_arch_mutex, portMAX_DELAY); // PATCH: was one tick with the result ignored: callers ran unlocked under contention
 }
 
 extern "C" void __wrap_cyw43_thread_exit() {
