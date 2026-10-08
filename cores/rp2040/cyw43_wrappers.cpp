@@ -148,8 +148,13 @@ static bool CheckPicoW() {
 
 bool __isPicoW = true;
 
+extern "C" bool cyw43_firmware_locate(uintptr_t *data, int *wifi_fw_len, int *clm_len);
+extern "C" uintptr_t fw_data;
+extern "C" int cyw43_wifi_fw_len, cyw43_clm_len;
+
 extern "C" void init_cyw43_wifi() {
-    __isPicoW = CheckPicoW();
+    // No firmware to load: treated as a plain Pico, the radio is left off
+    __isPicoW = CheckPicoW() && cyw43_firmware_locate(&fw_data, &cyw43_wifi_fw_len, &cyw43_clm_len);
     if (__isPicoW) {
 #ifdef __FREERTOS
         __startLWIPThread(); // CYW43 async object does work with lwip_callbacks, need to make sure this is available before beginning

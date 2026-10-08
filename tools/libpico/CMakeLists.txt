@@ -226,6 +226,8 @@ endif()
 add_library(lwip-${cpu} STATIC)
 target_compile_definitions(lwip-${cpu} PUBLIC
     LWIP_IPV6=0
+    # The firmware is found at run time (cores/rp2040/cyw43_firmware.cpp), not linked in here
+    CYW43_CHIPSET_FIRMWARE_INCLUDE_FILE="cyw43_partition_firmware.h"
 )
 
 set(picow_link_libraries
@@ -251,6 +253,8 @@ target_link_libraries(lwip-${cpu}
 add_library(lwip-bt-${cpu} STATIC)
 target_compile_definitions(lwip-bt-${cpu} PUBLIC
     LWIP_IPV6=0
+    # The firmware is found at run time (cores/rp2040/cyw43_firmware.cpp), not linked in here
+    CYW43_CHIPSET_FIRMWARE_INCLUDE_FILE="cyw43_partition_firmware.h"
 )
 
 set(picow_bt_link_libraries
