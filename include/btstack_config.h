@@ -5,7 +5,9 @@
 #define ENABLE_LOG_DEBUG
 #define ENABLE_LOG_ERROR
 #define ENABLE_PRINTF_HEXDUMP
+#ifndef ARDUINO_PICO_BLE_PERIPHERAL
 #define ENABLE_SCO_OVER_HCI
+#endif
 
 #ifdef ENABLE_CLASSIC
 #define ENABLE_L2CAP_ENHANCED_RETRANSMISSION_MODE
@@ -19,7 +21,21 @@
 
 // BTstack configuration. buffers, sizes, ...
 #define HCI_OUTGOING_PRE_BUFFER_SIZE 4
+#ifdef ARDUINO_PICO_BLE_PERIPHERAL
+// Full 517-byte ATT MTU plus the four-byte L2CAP header. Keep two peer slots
+// and the existing pairing/flow-control limits; only client pools are removed.
+#ifdef ENABLE_CLASSIC
+#error "The BLE peripheral profile requires liblwip-ble.a, without Classic Bluetooth"
+#endif
+#define HCI_ACL_PAYLOAD_SIZE (517 + 4)
+#define ATT_REQUEST_BUFFER_SIZE 517
+#define MAX_NR_GATT_CLIENTS 0
+#define MAX_NR_HIDS_HOSTS 0
+#else
 #define HCI_ACL_PAYLOAD_SIZE (1691 + 4)
+#define MAX_NR_GATT_CLIENTS 1
+#define MAX_NR_HIDS_HOSTS 1
+#endif
 #define HCI_ACL_CHUNK_SIZE_ALIGNMENT 4
 #define MAX_NR_AVDTP_CONNECTIONS 1
 #define MAX_NR_AVDTP_STREAM_ENDPOINTS 1
@@ -27,10 +43,8 @@
 #define MAX_NR_BNEP_CHANNELS 1
 #define MAX_NR_BNEP_SERVICES 1
 #define MAX_NR_BTSTACK_LINK_KEY_DB_MEMORY_ENTRIES  2
-#define MAX_NR_GATT_CLIENTS 1
 #define MAX_NR_HCI_CONNECTIONS 2
 #define MAX_NR_HID_HOST_CONNECTIONS 1
-#define MAX_NR_HIDS_HOSTS 1
 #define MAX_NR_HFP_CONNECTIONS 1
 #define MAX_NR_L2CAP_CHANNELS  4
 #define MAX_NR_L2CAP_SERVICES  3
@@ -48,7 +62,11 @@
 
 // Enable and configure HCI Controller to Host Flow Control to avoid cyw43 shared bus overrun
 #define ENABLE_HCI_CONTROLLER_TO_HOST_FLOW_CONTROL
+#ifdef ARDUINO_PICO_BLE_PERIPHERAL
+#define HCI_HOST_ACL_PACKET_LEN HCI_ACL_PAYLOAD_SIZE
+#else
 #define HCI_HOST_ACL_PACKET_LEN 1024
+#endif
 #define HCI_HOST_ACL_PACKET_NUM 3
 #define HCI_HOST_SCO_PACKET_LEN 120
 #define HCI_HOST_SCO_PACKET_NUM 3

@@ -270,7 +270,23 @@ target_link_libraries(lwip-bt-${cpu}
     ${picow_bt_link_libraries}
 )
 
-foreach(tgt lwip lwip-bt)
+add_library(lwip-ble-${cpu} STATIC)
+get_filename_component(ble_framework_root "${PICO_SDK_PATH}/.." REALPATH)
+target_compile_options(lwip-ble-${cpu} PRIVATE
+    "-ffile-prefix-map=${ble_framework_root}=."
+)
+target_compile_definitions(lwip-ble-${cpu} PUBLIC
+    LWIP_IPV6=0
+    ARDUINO_PICO_BLE_PERIPHERAL=1
+    CYW43_CHIPSET_FIRMWARE_INCLUDE_FILE="cyw43_partition_firmware.h"
+)
+target_link_libraries(lwip-ble-${cpu}
+    ${picow_link_libraries}
+    pico_btstack_cyw43
+    pico_btstack_ble
+)
+
+foreach(tgt lwip lwip-bt lwip-ble)
     add_custom_command(TARGET ${tgt}-${cpu} POST_BUILD
         COMMAND arm-none-eabi-ar d lib${tgt}-${cpu}.a atomic.c.o bit_ops_aeabi.S.o boot_lock.c.o bootrom.c.o bootrom_lock.c.o claim.c.o clocks.c.o critical_section.c.o crt0.S.o datetime.c.o divider_hardware.S.o divider.S.o dma.c.o double_aeabi_rp2040.S.o double_init_rom_rp2040.c.o double_math.c.o double_v1_rom_shim_rp2040.S.o exception.c.o flash.c.o flash.c.o float_aeabi_rp2040.S.o float_init_rom_rp2040.c.o float_math.c.o float_v1_rom_shim_rp2040.S.o gpio.c.o irq.c.o irq_handler_chain.S.o lock_core.c.o malloc.c.o mem_ops_aeabi.S.o mutex.c.o panic.c.o pheap.c.o pico_int64_ops_aeabi.S.o pio.c.o platform.c.o pll.c.o printf.c.o queue.c.o rand.c.o runtime.c.o runtime_init_clocks.c.o runtime_init.c.o runtime_init_stack_guard.c.o sem.c.o standard_binary_info.c.o sync.c.o sync_spin_lock.c.o ticks.c.o time.c.o timeout_helper.c.o timer.c.o uart.c.o unique_id.c.o vreg.c.o watchdog.c.o xip_cache.c.o xosc.c.o
         COMMAND arm-none-eabi-ar d lib${tgt}-${cpu}.a init.c.o def.c.o dns.c.o inet_chksum.c.o ip.c.o mem.c.o memp.c.o netif.c.o pbuf.c.o raw.c.o stats.c.o sys.c.o altcp.c.o altcp_alloc.c.o altcp_tcp.c.o tcp.c.o tcp_in.c.o tcp_out.c.o timeouts.c.o udp.c.o autoip.c.o dhcp.c.o etharp.c.o icmp.c.o igmp.c.o ip4_frag.c.o ip4.c.o ip4_addr.c.o acd.c.o dhcp6.c.o ethip6.c.o icmp6.c.o inet6.c.o ip6.c.o ip6_addr.c.o ip6_frag.c.o mld6.c.o nd6.c.o api_lib.c.o api_msg.c.o err.c.o if_api.c.o netbuf.c.o netdb.c.o netifapi.c.o sockets.c.o tcpip.c.o ethernet.c.o bridgeif.c.o bridgeif_fdb.c.o slipif.c.o lowpan6_common.c.o lowpan6.c.o lowpan6_ble.c.o zepif.c.o auth.c.o ccp.c.o chap-md5.c.o chap_ms.c.o chap-new.c.o demand.c.o eap.c.o ecp.c.o eui64.c.o fsm.c.o ipcp.c.o ipv6cp.c.o lcp.c.o magic.c.o mppe.c.o multilink.c.o ppp.c.o pppapi.c.o pppcrypt.c.o pppoe.c.o pppol2tp.c.o pppos.c.o upap.c.o utils.c.o vj.c.o arc4.c.o des.c.o md4.c.o md5.c.o sha1.c.o sntp.c.o mdns.c.o mdns_out.c.o mdns_domain.c.o
@@ -281,7 +297,7 @@ add_custom_command(TARGET pico-${cpu} POST_BUILD
     COMMAND arm-none-eabi-ar d libpico-${cpu}.a msc_device.c.o midi_device.c.o hid_device.c.o ncm_device.c.o # TinyUSB devices stubbed out
 )
 
-foreach(tgt pico lwip lwip-bt)
+foreach(tgt pico lwip lwip-bt lwip-ble)
     add_custom_command(TARGET ${tgt}-${cpu} POST_BUILD
         COMMAND arm-none-eabi-ar d lib${tgt}-${cpu}.a pico_malloc.c.o newlib_interface.c.o stdlib.c.o stdio.c.o stdio_uart.c.o new_delete.cpp.o
         COMMAND arm-none-eabi-ar d lib${tgt}-${cpu}.a btstack_flash_bank.c.o  # Need to override with our own implementation
