@@ -13,18 +13,38 @@
 
 #include "pico/btstack_run_loop_async_context.h"
 #include "hardware/sync.h"
+#include "pico/critical_section.h"
 
 static void btstack_work_pending(async_context_t *context, async_when_pending_worker_t *worker);
 static SemaphoreHandle_t _run_loop_exit_binary;
+static critical_section_t _work_lock;
+static bool _work_queued;
+static __callback_req _workBuffer;
+static void do_btstack_work_pending(void *data);
+
+// Never run BTstack recursively or wait for LWIP while a caller holds CYW43.
+// Coalesce wakeups; the fixed request stays alive until the LWIP task runs it.
+static void schedule_btstack_work() {
+    critical_section_enter_blocking(&_work_lock);
+    if (!_work_queued) {
+        _work_queued = true;
+        lwip_callback(do_btstack_work_pending, nullptr, &_workBuffer);
+    }
+    critical_section_exit(&_work_lock);
+}
 
 static void do_btstack_work_pending(void *data) {
     (void) data;
     cyw43_thread_enter(); // PATCH
+    critical_section_enter_blocking(&_work_lock);
+    _work_queued = false;
+    critical_section_exit(&_work_lock);
     btstack_work_pending(NULL, NULL);
     cyw43_thread_exit();
 }
 
 static void btstack_run_loop_freertos_native_init(void) {
+    critical_section_init(&_work_lock);
     _run_loop_exit_binary = xSemaphoreCreateBinary();
     btstack_run_loop_base_init();
 }
@@ -58,14 +78,14 @@ static void btstack_run_loop_freertos_native_set_timer(btstack_timer_source_t *t
     cyw43_thread_enter();
     ts->timeout = to_ms_since_boot(get_absolute_time()) + timeout_in_ms + 1;
     cyw43_thread_exit();
-    lwip_callback(do_btstack_work_pending, NULL); // PATCH: outside the lock, the LWIP thread takes it
+    // set_timer only assigns the deadline; add_timer schedules processing.
 }
 
 static void btstack_run_loop_freertos_native_add_timer(btstack_timer_source_t *timer) {
     cyw43_thread_enter();
     btstack_run_loop_base_add_timer(timer);
     cyw43_thread_exit();
-    lwip_callback(do_btstack_work_pending, NULL); // PATCH
+    schedule_btstack_work();
 }
 
 static bool btstack_run_loop_freertos_native_remove_timer(btstack_timer_source_t *timer) {
@@ -98,11 +118,11 @@ static void btstack_run_loop_freertos_native_execute_on_main_thread(btstack_cont
     cyw43_thread_enter();
     btstack_run_loop_base_add_callback(callback_registration);
     cyw43_thread_exit();
-    lwip_callback(do_btstack_work_pending, NULL); // PATCH
+    schedule_btstack_work();
 }
 
 static void btstack_run_loop_freertos_native_poll_data_sources_from_irq(void) {
-    lwip_callback(do_btstack_work_pending, NULL);
+    schedule_btstack_work();
 }
 
 static const btstack_run_loop_t btstack_run_loop_freertos_native = {
@@ -126,10 +146,8 @@ static alarm_id_t _timeout = -1;
 static int64_t cb_btstack_timeout_worker(alarm_id_t id, void *user_data) {
     (void) id;
     (void) user_data;
-    static __callback_req _timeoutIRQBuffer;
-    // This will be in IRQ context, so do a lwip callback.  Only one at a time can be outstanding so this single struct is good enough
     _timeout = -1;
-    lwip_callback(do_btstack_work_pending, NULL, &_timeoutIRQBuffer);
+    schedule_btstack_work();
     return 0; // Don't reschedule
 }
 
@@ -146,14 +164,13 @@ static void btstack_work_pending(__unused async_context_t *context, __unused asy
     btstack_run_loop_base_process_timers(now);
     now = to_ms_since_boot(get_absolute_time());
     int ms = btstack_run_loop_base_get_time_until_timeout(now);
-    if (ms == -1) {
-        if (_timeout != -1) {
-            cancel_alarm(_timeout);
-            _timeout = -1;
-        }
-    } else {
-        _timeout = add_alarm_in_ms(ms, cb_btstack_timeout_worker, NULL, true);
-    }
+    // Replace the previous alarm instead of accumulating one per wakeup.
+    // Alarm callbacks and this worker run on core 0; mask its IRQ while rearming.
+    uint32_t irq_state = save_and_disable_interrupts();
+    if (_timeout > 0) cancel_alarm(_timeout);
+    _timeout = -1;
+    if (ms != -1) _timeout = add_alarm_in_ms(ms, cb_btstack_timeout_worker, NULL, true);
+    restore_interrupts(irq_state);
 }
 
 // The only exported function here...
