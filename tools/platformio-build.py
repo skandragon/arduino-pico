@@ -84,7 +84,20 @@ env.Replace(
 
 # pico support library depends on ipv6 enable/disable
 libpico = File(os.path.join(FRAMEWORK_DIR, "lib", chip, "libpico.a"))
-if "PIO_FRAMEWORK_ARDUINO_ENABLE_BLUETOOTH" in flatten_cppdefines:
+if "PIO_FRAMEWORK_ARDUINO_ENABLE_BLE_PERIPHERAL" in flatten_cppdefines:
+    if "PIO_FRAMEWORK_ARDUINO_ENABLE_BLUETOOTH" in flatten_cppdefines:
+        raise RuntimeError("Select BLE peripheral or general Bluetooth support, not both")
+    libpicow = File(os.path.join(FRAMEWORK_DIR, "lib", chip, "liblwip-ble.a"))
+    if not os.path.isfile(str(libpicow)):
+        raise RuntimeError("This framework package has no BLE peripheral archive for " + chip)
+    env.Append(
+        CPPDEFINES=[
+            ("ARDUINO_PICO_BLE_PERIPHERAL", 1),
+            ("ENABLE_BLE", 1),
+            ("CYW43_ENABLE_BLUETOOTH", 1)
+        ]
+    )
+elif "PIO_FRAMEWORK_ARDUINO_ENABLE_BLUETOOTH" in flatten_cppdefines:
     libpicow = File(os.path.join(FRAMEWORK_DIR, "lib", chip, "liblwip-bt.a"))
     env.Append(
         CPPDEFINES=[
